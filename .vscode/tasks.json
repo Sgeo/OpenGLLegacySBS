@@ -10,12 +10,13 @@
 				"/Zi",
 				"/EHsc",
 				"/Fe:",
-				"${fileDirname}\\VPSBS.dll",
-				"vcpkg\\installed\\x64-windows\\lib\\detours.lib",
+				"${fileDirname}\\SBS.dll",
+				"vcpkg\\installed\\x86-windows\\lib\\detours.lib",
 				"opengl32.lib",
+				"user32.lib",
 				"${file}",
-				"/I vcpkg\\installed\\x64-windows\\include\\detours",
-				"/link /MACHINE:X64 /export:DetourFinishHelperProcess,@1,NONAME"
+				"/I vcpkg\\installed\\x86-windows\\include\\detours",
+				"/link /MACHINE:X86 /export:DetourFinishHelperProcess,@1,NONAME"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"

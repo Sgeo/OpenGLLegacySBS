@@ -2,13 +2,18 @@
 #include <windows.h>
 #include <GL/gl.h>
 
-#include "vcpkg\\installed\\x64-windows\\include\\detours\\detours.h"
+#include "vcpkg\\installed\\x86-windows\\include\\detours\\detours.h"
 
 static void (WINAPI * trueGlViewport)(GLint, GLint, GLsizei, GLsizei) = glViewport;
 static void (WINAPI * trueGlScissor)(GLint, GLint, GLsizei, GLsizei) = glScissor;
 static void (WINAPI * trueGlMatrixMode)(GLenum) = glMatrixMode;
 static void (WINAPI * trueGlDrawArrays)(GLenum mode, GLint first, GLsizei count) = glDrawArrays;
 static void (WINAPI * trueGlDrawElements)(GLenum mode, GLsizei count, GLenum type, const void * indices) = glDrawElements;
+static void (WINAPI * trueGlBegin)(GLenum mode) = glBegin;
+static void (WINAPI * trueGlEnd)() = glEnd;
+
+static void (WINAPI * trueGlDrawArraysEXT)(GLenum mode, GLint first, GLsizei count) = NULL;
+static PROC (WINAPI * trueWglGetProcAddress)(LPCSTR) = wglGetProcAddress;
 
 typedef struct Viewport {
     GLint x;
@@ -29,6 +34,8 @@ static Viewport currentViewport;
 static Scissor currentScissor;
 
 static GLenum currentMatrixMode;
+
+static GLuint currentBeginEndList;
 
 void leftSide(void) {
     trueGlViewport(currentViewport.x, currentViewport.y, currentViewport.width/2, currentViewport.height);
@@ -85,12 +92,49 @@ void WINAPI hookedGlDrawArrays(GLenum mode, GLint first, GLsizei count) {
     neutral();
 }
 
+void WINAPI hookedGlDrawArraysEXT(GLenum mode, GLint first, GLsizei count) {
+    leftSide();
+    trueGlDrawArraysEXT(mode, first, count);
+    rightSide();
+    trueGlDrawArraysEXT(mode, first, count);
+    neutral();
+}
+
 void WINAPI hookedGlDrawElements(GLenum mode, GLsizei count, GLenum type, const void * indices) {
     leftSide();
     trueGlDrawElements(mode, count, type, indices);
     rightSide();
     trueGlDrawElements(mode, count, type, indices);
     neutral();
+}
+
+void WINAPI hookedGlBegin(GLenum mode) {
+    if(!currentBeginEndList) {
+        currentBeginEndList = glGenLists(1);
+    }
+    glNewList(currentBeginEndList, GL_COMPILE);
+    trueGlBegin(mode);
+}
+
+void WINAPI hookedGlEnd() {
+    trueGlEnd();
+    glEndList();
+    
+    leftSide();
+    glCallList(currentBeginEndList);
+    rightSide();
+    glCallList(currentBeginEndList);
+    neutral();
+}
+
+PROC WINAPI hookedWglGetProcAddress(LPCSTR procName) {
+    //MessageBoxA(NULL, procName, "wglGetProcAddress", 0);
+    if(strcmp("glDrawArraysEXT", procName) == 0) {
+        trueGlDrawArraysEXT = (void (WINAPI *)(GLenum, GLint, GLsizei))trueWglGetProcAddress("glDrawArraysEXT");
+        return (PROC)hookedGlDrawArraysEXT;
+    } else {
+        return trueWglGetProcAddress(procName);
+    }
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
@@ -117,6 +161,9 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         DetourAttach(&(PVOID&)trueGlMatrixMode, hookedGlMatrixMode);
         DetourAttach(&(PVOID&)trueGlDrawArrays, hookedGlDrawArrays);
         DetourAttach(&(PVOID&)trueGlDrawElements, hookedGlDrawElements);
+        DetourAttach(&(PVOID&)trueWglGetProcAddress, hookedWglGetProcAddress);
+        DetourAttach(&(PVOID&)trueGlBegin, hookedGlBegin);
+        DetourAttach(&(PVOID&)trueGlEnd, hookedGlEnd);
         error = DetourTransactionCommit();
 
         if (error == NO_ERROR) {
@@ -136,6 +183,9 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         DetourDetach(&(PVOID&)trueGlMatrixMode, hookedGlMatrixMode);
         DetourDetach(&(PVOID&)trueGlDrawArrays, hookedGlDrawArrays);
         DetourDetach(&(PVOID&)trueGlDrawElements, hookedGlDrawElements);
+        DetourDetach(&(PVOID&)trueWglGetProcAddress, hookedWglGetProcAddress);
+        DetourDetach(&(PVOID&)trueGlBegin, hookedGlBegin);
+        DetourDetach(&(PVOID&)trueGlEnd, hookedGlEnd);
         error = DetourTransactionCommit();
 
         printf("ogldet" DETOURS_STRINGIFY(DETOURS_BITS) ".dll:"
