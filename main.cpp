@@ -168,14 +168,18 @@ void WINAPI hookedGlBegin(GLenum mode) {
     if(!currentBeginEndList) {
         currentBeginEndList = glGenLists(1);
     }
-    glNewList(currentBeginEndList, GL_COMPILE);
+    if(!currentListMode) {
+        trueGlNewList(currentBeginEndList, GL_COMPILE);
+    }
     trueGlBegin(mode);
 }
 
 void WINAPI hookedGlEnd() {
     trueGlEnd();
-    glEndList();
-    glCallList(currentBeginEndList);
+    if(!currentListMode) {
+        trueGlEndList();
+        glCallList(currentBeginEndList); // Call faked glCallList to have it do stereo
+    }
 }
 
 void WINAPI hookedGlNewList(GLuint list, GLenum mode) {
