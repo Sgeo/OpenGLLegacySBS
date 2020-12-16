@@ -37,7 +37,19 @@ static GLenum currentMatrixMode;
 
 static GLuint currentBeginEndList;
 
+void lazyInitViewport() {
+    if(!currentViewport.width) {
+        GLint viewport[] = {0, 0, 0, 0};
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        currentViewport.x = viewport[0];
+        currentViewport.y = viewport[1];
+        currentViewport.width = viewport[2];
+        currentViewport.height = viewport[3];
+    }
+}
+
 void leftSide(void) {
+    lazyInitViewport();
     trueGlViewport(currentViewport.x, currentViewport.y, currentViewport.width/2, currentViewport.height);
     trueGlScissor(currentScissor.x, currentScissor.y, currentScissor.width/2, currentScissor.height);
     trueGlMatrixMode(GL_PROJECTION); // The legacy matrix manipulation functions (e.g. glTranslatef and glMultMatrix) apply before the matrix on the stack
@@ -142,6 +154,7 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
     LONG error;
     (void)hinst;
     (void)reserved;
+    
 
     if (DetourIsHelperProcess()) {
         return TRUE;
@@ -167,10 +180,12 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         error = DetourTransactionCommit();
 
         if (error == NO_ERROR) {
+            MessageBoxA(NULL, "Successfully hooked", "Hook", 0);
             printf("ogldet" DETOURS_STRINGIFY(DETOURS_BITS) ".dll:"
                    " Detoured glFinish().\n");
         }
         else {
+            //MessageBoxA(NULL, "Hook unsuccessful", "Hook", 0);
             printf("ogldet" DETOURS_STRINGIFY(DETOURS_BITS) ".dll:"
                    " Error detouring glFinish(): %d\n", error);
         }
