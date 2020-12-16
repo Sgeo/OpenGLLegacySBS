@@ -9,8 +9,12 @@ static void (WINAPI * trueGlScissor)(GLint, GLint, GLsizei, GLsizei) = glScissor
 static void (WINAPI * trueGlMatrixMode)(GLenum) = glMatrixMode;
 static void (WINAPI * trueGlDrawArrays)(GLenum mode, GLint first, GLsizei count) = glDrawArrays;
 static void (WINAPI * trueGlDrawElements)(GLenum mode, GLsizei count, GLenum type, const void * indices) = glDrawElements;
+static void (WINAPI * trueGlCallList)(GLuint list) = glCallList;
+static void (WINAPI * trueGlCallLists)(GLsizei n, GLenum type, const void * lists) = glCallLists;
 static void (WINAPI * trueGlBegin)(GLenum mode) = glBegin;
 static void (WINAPI * trueGlEnd)() = glEnd;
+static void (WINAPI * trueGlNewList)(GLuint list, GLenum mode) = glNewList;
+static void (WINAPI * trueGlEndList)() = glEndList;
 
 static void (WINAPI * trueGlDrawArraysEXT)(GLenum mode, GLint first, GLsizei count) = NULL;
 static PROC (WINAPI * trueWglGetProcAddress)(LPCSTR) = wglGetProcAddress;
@@ -36,6 +40,9 @@ static Scissor currentScissor;
 static GLenum currentMatrixMode;
 
 static GLuint currentBeginEndList;
+
+static GLenum currentListMode = 0;
+static GLuint currentList = 0;
 
 void lazyInitViewport() {
     if(!currentViewport.width) {
@@ -97,27 +104,64 @@ void WINAPI hookedGlMatrixMode(GLenum mode) {
 }
 
 void WINAPI hookedGlDrawArrays(GLenum mode, GLint first, GLsizei count) {
-    leftSide();
-    trueGlDrawArrays(mode, first, count);
-    rightSide();
-    trueGlDrawArrays(mode, first, count);
-    neutral();
+    if(!currentListMode) {
+        leftSide();
+        trueGlDrawArrays(mode, first, count);
+        rightSide();
+        trueGlDrawArrays(mode, first, count);
+        neutral();
+    } else {
+        trueGlDrawArrays(mode, first, count);
+    }
 }
 
 void WINAPI hookedGlDrawArraysEXT(GLenum mode, GLint first, GLsizei count) {
-    leftSide();
-    trueGlDrawArraysEXT(mode, first, count);
-    rightSide();
-    trueGlDrawArraysEXT(mode, first, count);
-    neutral();
+    if(!currentListMode) {
+        leftSide();
+        trueGlDrawArraysEXT(mode, first, count);
+        rightSide();
+        trueGlDrawArraysEXT(mode, first, count);
+        neutral();
+    } else {
+        trueGlDrawArraysEXT(mode, first, count);
+    }
 }
 
 void WINAPI hookedGlDrawElements(GLenum mode, GLsizei count, GLenum type, const void * indices) {
-    leftSide();
-    trueGlDrawElements(mode, count, type, indices);
-    rightSide();
-    trueGlDrawElements(mode, count, type, indices);
-    neutral();
+    if(!currentListMode) {
+        leftSide();
+        trueGlDrawElements(mode, count, type, indices);
+        rightSide();
+        trueGlDrawElements(mode, count, type, indices);
+        neutral();
+    } else {
+        trueGlDrawElements(mode, count, type, indices);
+    }
+
+}
+
+void WINAPI hookedGlCallList(GLuint list) {
+    if(!currentListMode) {
+        leftSide();
+        trueGlCallList(list);
+        rightSide();
+        trueGlCallList(list);
+        neutral();
+    } else {
+        trueGlCallList(list);
+    }
+}
+
+void WINAPI hookedGlCallLists(GLsizei n, GLenum type, const void * lists) {
+    if(!currentListMode) {
+        leftSide();
+        trueGlCallLists(n, type, lists);
+        rightSide();
+        trueGlCallLists(n, type, lists);
+        neutral();
+    } else {
+        trueGlCallLists(n, type, lists);
+    }
 }
 
 void WINAPI hookedGlBegin(GLenum mode) {
@@ -131,13 +175,26 @@ void WINAPI hookedGlBegin(GLenum mode) {
 void WINAPI hookedGlEnd() {
     trueGlEnd();
     glEndList();
-    
-    leftSide();
     glCallList(currentBeginEndList);
-    rightSide();
-    glCallList(currentBeginEndList);
-    neutral();
 }
+
+void WINAPI hookedGlNewList(GLuint list, GLenum mode) {
+    currentList = 0;
+    currentListMode = mode;
+    trueGlNewList(list, GL_COMPILE);
+}
+
+void WINAPI hookedGlEndList() {
+    trueGlEndList();
+    int execute = currentListMode == GL_COMPILE_AND_EXECUTE;
+    currentList = 0;
+    currentListMode = 0;
+    if(execute) {
+        glCallList(currentList);
+    }
+}
+
+
 
 PROC WINAPI hookedWglGetProcAddress(LPCSTR procName) {
     //MessageBoxA(NULL, procName, "wglGetProcAddress", 0);
@@ -174,9 +231,13 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         DetourAttach(&(PVOID&)trueGlMatrixMode, hookedGlMatrixMode);
         DetourAttach(&(PVOID&)trueGlDrawArrays, hookedGlDrawArrays);
         DetourAttach(&(PVOID&)trueGlDrawElements, hookedGlDrawElements);
+        DetourAttach(&(PVOID&)trueGlCallList, hookedGlCallList);
+        DetourAttach(&(PVOID&)trueGlCallLists, hookedGlCallLists);
         DetourAttach(&(PVOID&)trueWglGetProcAddress, hookedWglGetProcAddress);
         DetourAttach(&(PVOID&)trueGlBegin, hookedGlBegin);
         DetourAttach(&(PVOID&)trueGlEnd, hookedGlEnd);
+        DetourAttach(&(PVOID&)trueGlNewList, hookedGlNewList);
+        DetourAttach(&(PVOID&)trueGlEndList, hookedGlEndList);
         error = DetourTransactionCommit();
 
         if (error == NO_ERROR) {
@@ -198,9 +259,13 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         DetourDetach(&(PVOID&)trueGlMatrixMode, hookedGlMatrixMode);
         DetourDetach(&(PVOID&)trueGlDrawArrays, hookedGlDrawArrays);
         DetourDetach(&(PVOID&)trueGlDrawElements, hookedGlDrawElements);
+        DetourDetach(&(PVOID&)trueGlCallList, hookedGlCallList);
+        DetourDetach(&(PVOID&)trueGlCallLists, hookedGlCallLists);
         DetourDetach(&(PVOID&)trueWglGetProcAddress, hookedWglGetProcAddress);
         DetourDetach(&(PVOID&)trueGlBegin, hookedGlBegin);
         DetourDetach(&(PVOID&)trueGlEnd, hookedGlEnd);
+        DetourDetach(&(PVOID&)trueGlNewList, hookedGlNewList);
+        DetourDetach(&(PVOID&)trueGlEndList, hookedGlEndList);
         error = DetourTransactionCommit();
 
         printf("ogldet" DETOURS_STRINGIFY(DETOURS_BITS) ".dll:"
