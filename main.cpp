@@ -2,6 +2,9 @@
 #include <windows.h>
 #include <GL/gl.h>
 
+//#include "vcpkg\\installed\\x86-windows\\include\\glm\\glm.hpp"
+//#include "vcpkg\\installed\\x86-windows\\include\\glm\\gtc\\type_ptr.hpp"
+
 #include "vcpkg\\installed\\x86-windows\\include\\detours\\detours.h"
 
 static void (WINAPI * trueGlViewport)(GLint, GLint, GLsizei, GLsizei) = glViewport;
@@ -18,6 +21,27 @@ static void (WINAPI * trueGlEndList)() = glEndList;
 
 static void (WINAPI * trueGlDrawArraysEXT)(GLenum mode, GLint first, GLsizei count) = NULL;
 static PROC (WINAPI * trueWglGetProcAddress)(LPCSTR) = wglGetProcAddress;
+
+float SEPARATION = 0.03;
+float CONVERGENCE = 0.0;
+
+float leftEyeMatrixData[] = {
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    SEPARATION * CONVERGENCE, 0.0, 1.0, 0.0,
+    SEPARATION, 0.0, 0.0, 1.0
+};
+
+//glm::mat4 leftEyeMatrix = glm::make_mat4(leftEyeMatrixData);
+
+float rightEyeMatrixData[] = {
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    -SEPARATION * CONVERGENCE, 0.0, 1.0, 0.0,
+    -SEPARATION, 0.0, 0.0, 1.0
+};
+
+//glm::mat4 rightEyeMatrix = glm::make_mat4(rightEyeMatrixData);
 
 typedef struct Viewport {
     GLint x;
@@ -44,6 +68,7 @@ static GLuint currentBeginEndList;
 static GLenum currentListMode = 0;
 static GLuint currentList = 0;
 
+
 void lazyInitViewport() {
     if(!currentViewport.width) {
         GLint viewport[] = {0, 0, 0, 0};
@@ -62,7 +87,7 @@ void leftSide(void) {
     trueGlMatrixMode(GL_PROJECTION); // The legacy matrix manipulation functions (e.g. glTranslatef and glMultMatrix) apply before the matrix on the stack
                                      // Thus, to apply to the result of modelmatrix, we need to apply before the projection matrix.
     glPushMatrix();
-    glTranslatef(0.03, 0, 0);
+    glMultMatrixf(leftEyeMatrixData);
 }
 
 void rightSide(void) {
@@ -70,7 +95,7 @@ void rightSide(void) {
     trueGlViewport(currentViewport.x + currentViewport.width/2, currentViewport.y, currentViewport.width/2, currentViewport.height);
     trueGlScissor(currentScissor.x + currentScissor.width/2, currentScissor.y, currentScissor.width/2, currentScissor.height);
     glPushMatrix();
-    glTranslatef(-0.03, 0, 0);
+    glMultMatrixf(rightEyeMatrixData);
 }
 
 
