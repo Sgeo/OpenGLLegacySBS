@@ -179,7 +179,7 @@ void WINAPI hookedGlEnd() {
 }
 
 void WINAPI hookedGlNewList(GLuint list, GLenum mode) {
-    currentList = 0;
+    currentList = list;
     currentListMode = mode;
     trueGlNewList(list, GL_COMPILE);
 }
