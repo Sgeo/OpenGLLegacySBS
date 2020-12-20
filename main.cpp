@@ -7,6 +7,8 @@
 
 #include "vcpkg\\installed\\x86-windows\\include\\detours\\detours.h"
 
+//#define OPENGLIDE
+
 static void (WINAPI * trueGlViewport)(GLint, GLint, GLsizei, GLsizei) = glViewport;
 static void (WINAPI * trueGlScissor)(GLint, GLint, GLsizei, GLsizei) = glScissor;
 static void (WINAPI * trueGlMatrixMode)(GLenum) = glMatrixMode;
@@ -21,6 +23,10 @@ static void (WINAPI * trueGlEndList)() = glEndList;
 
 static void (WINAPI * trueGlDrawArraysEXT)(GLenum mode, GLint first, GLsizei count) = NULL;
 static PROC (WINAPI * trueWglGetProcAddress)(LPCSTR) = wglGetProcAddress;
+
+#ifdef OPENGLIDE
+static void (WINAPI * trueGlVertex3fv)(const GLfloat *v) = glVertex3fv;
+#endif
 
 float SEPARATION = 0.03;
 float CONVERGENCE = 0.0;
@@ -40,6 +46,15 @@ float rightEyeMatrixData[] = {
     -SEPARATION * CONVERGENCE, 0.0, 1.0, 0.0,
     -SEPARATION, 0.0, 0.0, 1.0
 };
+
+#ifdef OPENGLIDE
+float reprojectMatrixData[] = {
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 1.0,
+    0.0, 0.0, 0.0, 0.0
+};
+#endif
 
 //glm::mat4 rightEyeMatrix = glm::make_mat4(rightEyeMatrixData);
 
@@ -87,6 +102,9 @@ void leftSide(void) {
     trueGlMatrixMode(GL_PROJECTION); // The legacy matrix manipulation functions (e.g. glTranslatef and glMultMatrix) apply before the matrix on the stack
                                      // Thus, to apply to the result of modelmatrix, we need to apply before the projection matrix.
     glPushMatrix();
+    #ifdef OPENGLIDE
+    glMultMatrixf(reprojectMatrixData);
+    #endif
     glMultMatrixf(leftEyeMatrixData);
 }
 
@@ -95,6 +113,9 @@ void rightSide(void) {
     trueGlViewport(currentViewport.x + currentViewport.width/2, currentViewport.y, currentViewport.width/2, currentViewport.height);
     trueGlScissor(currentScissor.x + currentScissor.width/2, currentScissor.y, currentScissor.width/2, currentScissor.height);
     glPushMatrix();
+    #ifdef OPENGLIDE
+    glMultMatrixf(reprojectMatrixData);
+    #endif
     glMultMatrixf(rightEyeMatrixData);
 }
 
@@ -194,7 +215,12 @@ void WINAPI hookedGlBegin(GLenum mode) {
         currentBeginEndList = glGenLists(1);
     }
     if(!currentListMode) {
+        glGetError();
         trueGlNewList(currentBeginEndList, GL_COMPILE);
+        GLenum error = glGetError();
+        if(error) {
+            MessageBoxA(NULL, "Error!", "Hook", 0);
+        }
     }
     trueGlBegin(mode);
 }
@@ -235,6 +261,19 @@ PROC WINAPI hookedWglGetProcAddress(LPCSTR procName) {
     }
 }
 
+#ifdef OPENGLIDE
+void WINAPI hookedGlVertex3fv(const GLfloat *v) {
+    //printf("vertex: %f, %f, %f\n", v[0], v[1], v[2]);
+    GLfloat mine[3] = {v[0], v[1], v[2]};
+    if(v[2]) {
+        mine[0] *= v[2];
+        mine[1] *= v[2];
+        mine[2] *= v[2];
+    }
+    trueGlVertex3fv(mine);
+}
+#endif
+
 BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
 {
     LONG error;
@@ -267,6 +306,9 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         DetourAttach(&(PVOID&)trueGlEnd, hookedGlEnd);
         DetourAttach(&(PVOID&)trueGlNewList, hookedGlNewList);
         DetourAttach(&(PVOID&)trueGlEndList, hookedGlEndList);
+        #ifdef OPENGLIDE
+        DetourAttach(&(PVOID&)trueGlVertex3fv, hookedGlVertex3fv);
+        #endif
         error = DetourTransactionCommit();
 
         if (error == NO_ERROR) {
@@ -295,6 +337,9 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         DetourDetach(&(PVOID&)trueGlEnd, hookedGlEnd);
         DetourDetach(&(PVOID&)trueGlNewList, hookedGlNewList);
         DetourDetach(&(PVOID&)trueGlEndList, hookedGlEndList);
+        #ifdef OPENGLIDE
+        DetourDetach(&(PVOID&)trueGlVertex3fv, hookedGlVertex3fv);
+        #endif
         error = DetourTransactionCommit();
 
         printf("ogldet" DETOURS_STRINGIFY(DETOURS_BITS) ".dll:"
