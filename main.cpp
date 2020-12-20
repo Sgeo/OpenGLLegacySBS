@@ -5,7 +5,9 @@
 //#include "vcpkg\\installed\\x86-windows\\include\\glm\\glm.hpp"
 //#include "vcpkg\\installed\\x86-windows\\include\\glm\\gtc\\type_ptr.hpp"
 
-#include "vcpkg\\installed\\x86-windows\\include\\detours\\detours.h"
+#include <detours/detours.h>
+
+#include <openxr/openxr.hpp>
 
 //#define OPENGLIDE
 
