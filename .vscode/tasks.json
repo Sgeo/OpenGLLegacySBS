@@ -12,10 +12,11 @@
 				"/Fe:",
 				"${fileDirname}\\SBS.dll",
 				"vcpkg\\installed\\x86-windows\\lib\\detours.lib",
+				"vcpkg\\installed\\x86-windows\\lib\\openxr_loader.lib",
 				"opengl32.lib",
 				"user32.lib",
 				"${file}",
-				"/I vcpkg\\installed\\x86-windows\\include\\detours",
+				"/Ivcpkg\\installed\\x86-windows\\include",
 				"/link /MACHINE:X86 /export:DetourFinishHelperProcess,@1,NONAME"
 			],
 			"options": {
