@@ -7,7 +7,7 @@
 
 #include <detours/detours.h>
 
-#include <openxr/openxr.hpp>
+#include "XR.hpp"
 
 //#define OPENGLIDE
 
@@ -25,6 +25,10 @@ static void (WINAPI * trueGlEndList)() = glEndList;
 
 static void (WINAPI * trueGlDrawArraysEXT)(GLenum mode, GLint first, GLsizei count) = NULL;
 static PROC (WINAPI * trueWglGetProcAddress)(LPCSTR) = wglGetProcAddress;
+
+static int (WINAPI * trueEntryPoint)(VOID) = NULL;
+
+static BOOL (WINAPI * trueWglMakeCurrent)(HDC, HGLRC) = wglMakeCurrent;
 
 #ifdef OPENGLIDE
 static void (WINAPI * trueGlVertex3fv)(const GLfloat *v) = glVertex3fv;
@@ -59,6 +63,8 @@ float reprojectMatrixData[] = {
 #endif
 
 //glm::mat4 rightEyeMatrix = glm::make_mat4(rightEyeMatrixData);
+
+MyXrManager *myXr = NULL;
 
 typedef struct Viewport {
     GLint x;
@@ -263,6 +269,27 @@ PROC WINAPI hookedWglGetProcAddress(LPCSTR procName) {
     }
 }
 
+int WINAPI hookedEntryPoint(VOID) {
+    //myXr = new MyXrManager;
+    return trueEntryPoint();
+}
+
+
+
+int WINAPI hookedWglMakeCurrent(HDC hdc, HGLRC hglrc) {
+    
+    int result = trueWglMakeCurrent(hdc, hglrc);
+    
+    // XR session creation code can result in wglMakeCurrent calls, so avoid recurisve instance creation
+    static BOOL insideMakeCurrent = FALSE;
+    if(!insideMakeCurrent) {
+        insideMakeCurrent = TRUE;
+        if(!myXr && hdc && hglrc) myXr = new MyXrManager(hdc, hglrc);
+        insideMakeCurrent = FALSE;
+    }
+    return result;
+}
+
 #ifdef OPENGLIDE
 void WINAPI hookedGlVertex3fv(const GLfloat *v) {
     //printf("vertex: %f, %f, %f\n", v[0], v[1], v[2]);
@@ -308,9 +335,12 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         DetourAttach(&(PVOID&)trueGlEnd, hookedGlEnd);
         DetourAttach(&(PVOID&)trueGlNewList, hookedGlNewList);
         DetourAttach(&(PVOID&)trueGlEndList, hookedGlEndList);
+        DetourAttach(&(PVOID&)trueWglMakeCurrent, hookedWglMakeCurrent);
         #ifdef OPENGLIDE
         DetourAttach(&(PVOID&)trueGlVertex3fv, hookedGlVertex3fv);
         #endif
+        trueEntryPoint = (int (WINAPI *)(VOID))DetourGetEntryPoint(NULL);
+        DetourAttach(&(PVOID&)trueEntryPoint, hookedEntryPoint);
         error = DetourTransactionCommit();
 
         if (error == NO_ERROR) {
@@ -339,9 +369,11 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
         DetourDetach(&(PVOID&)trueGlEnd, hookedGlEnd);
         DetourDetach(&(PVOID&)trueGlNewList, hookedGlNewList);
         DetourDetach(&(PVOID&)trueGlEndList, hookedGlEndList);
+        DetourDetach(&(PVOID&)trueWglMakeCurrent, hookedWglMakeCurrent);
         #ifdef OPENGLIDE
         DetourDetach(&(PVOID&)trueGlVertex3fv, hookedGlVertex3fv);
         #endif
+        DetourDetach(&(PVOID&)trueEntryPoint, hookedEntryPoint);
         error = DetourTransactionCommit();
 
         printf("ogldet" DETOURS_STRINGIFY(DETOURS_BITS) ".dll:"

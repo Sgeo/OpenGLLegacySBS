@@ -15,7 +15,8 @@
 				"vcpkg\\installed\\x86-windows\\lib\\openxr_loader.lib",
 				"opengl32.lib",
 				"user32.lib",
-				"${file}",
+				"main.cpp",
+				"XR.cpp",
 				"/Ivcpkg\\installed\\x86-windows\\include",
 				"/link /MACHINE:X86 /export:DetourFinishHelperProcess,@1,NONAME"
 			],
