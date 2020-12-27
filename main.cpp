@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <windows.h>
+#include <functional>
 #include <GL/gl.h>
 
 //#include "vcpkg\\installed\\x86-windows\\include\\glm\\glm.hpp"
@@ -135,6 +136,18 @@ void neutral(void) {
     trueGlScissor(currentScissor.x, currentScissor.y, currentScissor.width, currentScissor.height);
 }
 
+void stereo(std::function<void()> draw) {
+    if(!currentListMode) {
+        leftSide();
+        draw();
+        rightSide();
+        draw();
+        neutral();
+    } else {
+        draw();
+    }
+}
+
 void WINAPI hookedGlViewport(GLint x, GLint y, GLsizei width, GLsizei height)
 {
     currentViewport.x = x;
@@ -158,64 +171,23 @@ void WINAPI hookedGlMatrixMode(GLenum mode) {
 }
 
 void WINAPI hookedGlDrawArrays(GLenum mode, GLint first, GLsizei count) {
-    if(!currentListMode) {
-        leftSide();
-        trueGlDrawArrays(mode, first, count);
-        rightSide();
-        trueGlDrawArrays(mode, first, count);
-        neutral();
-    } else {
-        trueGlDrawArrays(mode, first, count);
-    }
+    stereo([=] {trueGlDrawArrays(mode, first, count);});
 }
 
 void WINAPI hookedGlDrawArraysEXT(GLenum mode, GLint first, GLsizei count) {
-    if(!currentListMode) {
-        leftSide();
-        trueGlDrawArraysEXT(mode, first, count);
-        rightSide();
-        trueGlDrawArraysEXT(mode, first, count);
-        neutral();
-    } else {
-        trueGlDrawArraysEXT(mode, first, count);
-    }
+    stereo([=] {trueGlDrawArraysEXT(mode, first, count);});
 }
 
 void WINAPI hookedGlDrawElements(GLenum mode, GLsizei count, GLenum type, const void * indices) {
-    if(!currentListMode) {
-        leftSide();
-        trueGlDrawElements(mode, count, type, indices);
-        rightSide();
-        trueGlDrawElements(mode, count, type, indices);
-        neutral();
-    } else {
-        trueGlDrawElements(mode, count, type, indices);
-    }
-
+    stereo([=] {trueGlDrawElements(mode, count, type, indices);});
 }
 
 void WINAPI hookedGlCallList(GLuint list) {
-    if(!currentListMode) {
-        leftSide();
-        trueGlCallList(list);
-        rightSide();
-        trueGlCallList(list);
-        neutral();
-    } else {
-        trueGlCallList(list);
-    }
+    stereo([=] {trueGlCallList(list);});
 }
 
 void WINAPI hookedGlCallLists(GLsizei n, GLenum type, const void * lists) {
-    if(!currentListMode) {
-        leftSide();
-        trueGlCallLists(n, type, lists);
-        rightSide();
-        trueGlCallLists(n, type, lists);
-        neutral();
-    } else {
-        trueGlCallLists(n, type, lists);
-    }
+    stereo([=] {trueGlCallLists(n, type, lists);});
 }
 
 void WINAPI hookedGlBegin(GLenum mode) {
