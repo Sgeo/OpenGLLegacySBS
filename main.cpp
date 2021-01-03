@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <windows.h>
 #include <functional>
+#include <optional>
 #include <GL/gl.h>
 
 //#include "vcpkg\\installed\\x86-windows\\include\\glm\\glm.hpp"
@@ -65,7 +66,7 @@ float reprojectMatrixData[] = {
 
 //glm::mat4 rightEyeMatrix = glm::make_mat4(rightEyeMatrixData);
 
-MyXrManager *myXr = NULL;
+std::optional<MyXrManager> myXr;
 
 typedef struct Viewport {
     GLint x;
@@ -256,7 +257,7 @@ int WINAPI hookedWglMakeCurrent(HDC hdc, HGLRC hglrc) {
     static BOOL insideMakeCurrent = FALSE;
     if(!insideMakeCurrent) {
         insideMakeCurrent = TRUE;
-        if(!myXr && hdc && hglrc) myXr = new MyXrManager(hdc, hglrc);
+        if(!myXr && hdc && hglrc) myXr.emplace(MyXrManager(hdc, hglrc));
         insideMakeCurrent = FALSE;
     }
     return result;
