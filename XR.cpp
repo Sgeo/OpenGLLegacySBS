@@ -27,7 +27,7 @@ MyXrManager::MyXrManager(HDC hdc, HGLRC hglrc) {
         xr::GraphicsBindingOpenGLWin32KHR graphicsBinding(hdc, hglrc);
         xr::SessionCreateInfo sessionCreateInfo({}, m_System);
         sessionCreateInfo.next = &graphicsBinding;
-        m_Instance.createSession(sessionCreateInfo);
+        m_Session = m_Instance.createSession(sessionCreateInfo);
         MessageBoxA(NULL, "Created session!", "XR", 0);
     } catch(xr::exceptions::SystemError e) {
         MessageBoxA(NULL, "ERROR", "XR", 0);
@@ -35,4 +35,31 @@ MyXrManager::MyXrManager(HDC hdc, HGLRC hglrc) {
         return;
     }
 
+}
+
+void MyXrManager::frame() {
+    try {
+        xr::EventDataBuffer eventDataBuffer;
+        m_Instance.pollEvent(eventDataBuffer, m_Dispatch);
+        if(eventDataBuffer.type == xr::StructureType::EventDataSessionStateChanged) {
+            auto sessionStateChange = reinterpret_cast<xr::EventDataSessionStateChanged&>(eventDataBuffer);
+            m_SessionState = sessionStateChange.state;
+            if(sessionStateChange.state == xr::SessionState::Ready) {
+                m_Session.beginSession(xr::SessionBeginInfo{xr::ViewConfigurationType::PrimaryStereo }, m_Dispatch);
+                m_SessionBegun = true;
+            }
+        }
+        if(m_SessionBegun && m_HadFirstFrame) {
+            m_Session.endFrame(xr::FrameEndInfo{xr::Time{}, xr::EnvironmentBlendMode::Opaque, 0, nullptr}, m_Dispatch);
+        }
+        if(m_SessionBegun) {
+            auto frameState = m_Session.waitFrame(xr::FrameWaitInfo{}, m_Dispatch);
+            m_Session.beginFrame(xr::FrameBeginInfo{}, m_Dispatch);
+            m_HadFirstFrame = true;
+        }
+    } catch(xr::exceptions::SystemError e) {
+        //MessageBoxA(NULL, "ERROR", "XR", 0);
+        //MessageBoxA(NULL, e.what(), "XR", 0);
+        return;
+    }
 }

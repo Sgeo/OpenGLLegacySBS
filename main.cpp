@@ -13,6 +13,7 @@
 
 //#define OPENGLIDE
 
+static void (WINAPI * trueGlClear)(GLbitfield) = glClear;
 static void (WINAPI * trueGlViewport)(GLint, GLint, GLsizei, GLsizei) = glViewport;
 static void (WINAPI * trueGlScissor)(GLint, GLint, GLsizei, GLsizei) = glScissor;
 static void (WINAPI * trueGlMatrixMode)(GLenum) = glMatrixMode;
@@ -147,6 +148,20 @@ void stereo(std::function<void()> draw) {
     } else {
         draw();
     }
+}
+
+void WINAPI hookedGlClear(GLbitfield mask) {
+    static bool CALLING = false;
+    if(!CALLING) {
+        CALLING = true;
+        if(mask & GL_COLOR_BUFFER_BIT) {
+            if(myXr) {
+                myXr->frame();
+            }
+        }
+        CALLING = false;
+    }
+    trueGlClear(mask);
 }
 
 void WINAPI hookedGlViewport(GLint x, GLint y, GLsizei width, GLsizei height)
@@ -296,6 +311,7 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
 
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
+        DetourAttach(&(PVOID&)trueGlClear, hookedGlClear);
         DetourAttach(&(PVOID&)trueGlViewport, hookedGlViewport);
         DetourAttach(&(PVOID&)trueGlScissor, hookedGlScissor);
         DetourAttach(&(PVOID&)trueGlMatrixMode, hookedGlMatrixMode);
@@ -330,6 +346,7 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD dwReason, LPVOID reserved)
     else if (dwReason == DLL_PROCESS_DETACH) {
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
+        DetourDetach(&(PVOID&)trueGlClear, hookedGlClear);
         DetourDetach(&(PVOID&)trueGlViewport, hookedGlViewport);
         DetourDetach(&(PVOID&)trueGlScissor, hookedGlScissor);
         DetourDetach(&(PVOID&)trueGlMatrixMode, hookedGlMatrixMode);

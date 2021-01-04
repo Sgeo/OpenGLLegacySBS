@@ -13,9 +13,13 @@ class MyXrManager {
     xr::Instance m_Instance;
     xr::Session m_Session;
     xr::SystemId m_System;
+    xr::SessionState m_SessionState = xr::SessionState::Unknown;
+    bool m_SessionBegun = false;
+    bool m_HadFirstFrame = false;
 
     public:
     MyXrManager(HDC, HGLRC);
+    void frame();
 };
 
 #endif
